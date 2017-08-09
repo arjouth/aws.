@@ -6,7 +6,7 @@ from email.mime.text import MIMEText
 from datetime import datetime
 
 
-outfile = '11-aws-bucket-permission-details.txt'
+outfile = 'file name'
 fhnad = open(outfile, 'w')
 outfile_html = 'outfile.html'
 htmlhand = open(outfile_html, 'w')
@@ -142,8 +142,8 @@ def convert_html():
 def send_email():
     with open(outfile_html) as myfile:
         myhtml = myfile.read()
-    me = "python2466@gmail.com"
-    you = "python2466@gmail.com"
+    me = "your emailid"
+    you = "distination emailid"
     # Create message container - the correct MIME type is multipart/alternative.
     msg = MIMEMultipart('multipart')
     msg['Subject'] = "S3 bucket info:"
@@ -163,7 +163,7 @@ def send_email():
     # Send the message via local SMTP server.
     s = smtplib.SMTP('smtp.gmail.com', 587)
     s.starttls()
-    s.login("python2466@gmail.com", "python@2466")
+    s.login("emailid", "password")
     # sendmail function takes 3 arguments: sender's address, recipient's address
     # and message to send - here it is sent as one string.
     s.sendmail(me, you, msg.as_string())

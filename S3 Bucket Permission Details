@@ -1,0 +1,192 @@
+from optparse import OptionParser
+import boto3
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from datetime import datetime
+
+
+outfile = 'out file name'
+fhnad = open(outfile, 'w')
+outfile_html = 'outfile.html'
+htmlhand = open(outfile_html, 'w')
+
+def getConfig():
+    parser = OptionParser()
+    # Read API Key & Secret from Environment...
+    parser.add_option('-f', '--format',  dest='format',  default='text', help='Output format: text, csv')
+    parser.add_option('-p', '--profile', dest='profile', default=None,   help='AWS Profile')
+    options, args = parser.parse_args()
+
+    return options
+
+def getBuckets(profile=None):
+    bs = boto3.session.Session(profile_name=profile)
+    s3 = bs.client('s3', config=boto3.session.Config(signature_version='s3v4'))
+
+    buckets    = {}
+    maxName    = 0
+    bucketList = s3.list_buckets()
+
+    for b in bucketList['Buckets']:
+        bucketName          = b['Name']
+        buckets[bucketName] = {}
+
+        grants = s3.get_bucket_acl(Bucket=bucketName)
+        for grant in grants['Grants']:
+            grantee_name = 'none'
+            grantee_id = 'none'
+
+            grantee = grant['Grantee']
+            if 'DisplayName' in grantee:
+                grantee_name = grantee['DisplayName']
+                grantee_id   = grantee['ID']
+            elif 'URI' in grantee:
+                grantee_name = grantee['URI'].split('/')[-1]
+                grantee_id   = grantee['URI']
+
+            if grantee_name not in buckets[bucketName]:
+                buckets[bucketName][grantee_name] = []
+
+            buckets[bucketName][grantee_name].append((grantee_id,grant['Permission']))
+
+    return buckets, maxName
+
+def textFormat(bucket, maxName):
+    reads      = []
+    writes     = []
+    reads_ACP  = []
+    writes_ACP = []
+
+    for grantee in bucket:
+        for grantee_id, permission in bucket[grantee]:
+            if 'READ' == permission:
+                reads.append(grantee)
+            if 'WRITE' == permission:
+                writes.append(grantee)
+            if 'READ_ACP' == permission:
+                reads_ACP.append(grantee)
+            if 'WRITE_ACP' == permission:
+                writes_ACP.append(grantee)
+            if 'FULL_CONTROL' == permission:
+                reads.append(grantee)
+                writes.append(grantee)
+                reads_ACP.append(grantee)
+                writes_ACP.append(grantee)
+
+    s = '{0:>{1}} --'.format(key, maxName)
+    t = ' ' + ' '*(maxName + 4)
+    if len(writes) > 0:
+        s += ' Write: %s;' % ''.join(writes)
+    if len(reads) > 0:
+        s += ' Read: %s;' % ''.join(reads)
+    if len(writes_ACP) > 0:
+        s += t + 'ACP Write: %s' % ''.join(writes_ACP)
+    if len(reads_ACP) > 0:
+        s += t + 'ACP Read: %s' % ''.join(reads_ACP)
+
+    return s
+
+
+def convert_html():
+    htmlhand.write("""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    body {background-color: WhiteSmoke ;}
+    table {
+            font-family: Calibri, sans-serif;
+            border-collapse: collapse;
+            width: 100%;
+    }
+
+    td, th {
+            border: 2px solid #778899;
+            text-align: center;
+            padding: 2px;
+    }
+    </style>
+    </head>
+    <body>
+    <h2>AWS S3 Bucket Permission Details:</h2>
+    <table>
+    <tr>
+            <th>Bucket Name</th>
+            <th>Object Write access</th>
+            <th>Object Read acces</th>
+            <th>Bucket Read access</th>
+            <th>Bucket Write access</th>
+    </tr>
+    """)
+    with open(outfile) as myfile:
+        for line in myfile:
+            data = line.strip().split()
+            #print data
+            if len(data) < 11: continue
+            bucket = data[0].split(";")[0].replace('none','')
+            write_state = data[3].split(";")[0].replace('none','').replace('AllUsers','Public Access')
+            read_state = data[5].split(";")[0].replace('none','').replace('AllUsers','Public Access')
+            ACP_write = data[8].split(";")[0].replace('none','').replace('AllUsers','Public Access')
+            ACP_read = data[11].split(";")[0].replace('none','').replace('AllUsers','Public Access')
+            if write_state == '' and read_state == '' and ACP_write == '' and ACP_read == '': continue
+            htmlhand.write("<tr><td>{0}</td><td>{1}</td><td>{2}</td><td>{3}</td><td>{4}</td></tr>".format(bucket, write_state,
+                                                                                                 read_state, ACP_write,
+                                                                                                 ACP_read))
+            htmlhand.flush()
+        else:
+            htmlhand.write("</table><br><br><br><p>this is an autoamted email, if any assistance required, please contact</p></body></html>")
+            htmlhand.flush()
+
+
+def send_email():
+    with open(outfile_html) as myfile:
+        myhtml = myfile.read()
+    me = "your emailid"
+    you = "destination emailid"
+    
+    # Create message container - the correct MIME type is multipart/alternative.
+    msg = MIMEMultipart('multipart')
+    msg['Subject'] = "S3 bucket info:"
+    msg['From'] = me
+    msg['To'] = you
+    
+    # Create the body of the message (a plain-text and an HTML version).
+    #text = "Automated Report: {0}\nS3 bucket information"
+    html = "{0}".format(myhtml)
+    
+    # Record the MIME types of both parts - text/plain and text/html.
+    #part1 = MIMEText(text, 'plain')
+    part2 = MIMEText(html, 'html')
+    
+    # Attach parts into message container.
+    # According to RFC 2046, the last part of a multipart message, in this case
+    # the HTML message, is best and preferred.
+    #msg.attach(part1)
+    msg.attach(part2)
+    
+    # Send the message via local SMTP server.
+    s = smtplib.SMTP('smtp.gmail.com', 587)
+    s.starttls()
+    s.login("emailid", "password")
+    
+    # sendmail function takes 3 arguments: sender's address, recipient's address
+    # and message to send - here it is sent as one string.
+    s.sendmail(me, you, msg.as_string())
+    s.quit()
+
+if __name__ == '__main__':
+    options = getConfig()
+
+    buckets, maxName = getBuckets(options.profile)
+
+    for key in buckets:
+        bucket = buckets[key]
+
+        if options.format == 'text':
+            fhnad.write(textFormat(bucket, maxName ))
+            fhnad.write("\n")
+            fhnad.flush()
+    else:
+        convert_html()
+        send_email()

@@ -6,7 +6,7 @@ from email.mime.text import MIMEText
 from datetime import datetime
 
 
-outfile = 'out file name'
+outfile = '11-aws-bucket-permission-details.txt'
 fhnad = open(outfile, 'w')
 outfile_html = 'outfile.html'
 htmlhand = open(outfile_html, 'w')
@@ -113,10 +113,10 @@ def convert_html():
     <table>
     <tr>
             <th>Bucket Name</th>
-            <th>Object Write access</th>
-            <th>Object Read acces</th>
             <th>Bucket Read access</th>
-            <th>Bucket Write access</th>
+            <th>Bucket Write acces</th>
+            <th>Bucket ACP Write access</th>
+            <th>Bucket ACP Read access</th>
     </tr>
     """)
     with open(outfile) as myfile:
@@ -142,34 +142,28 @@ def convert_html():
 def send_email():
     with open(outfile_html) as myfile:
         myhtml = myfile.read()
-    me = "your emailid"
-    you = "destination emailid"
-    
+    me = "python2466@gmail.com"
+    you = "python2466@gmail.com"
     # Create message container - the correct MIME type is multipart/alternative.
     msg = MIMEMultipart('multipart')
     msg['Subject'] = "S3 bucket info:"
     msg['From'] = me
     msg['To'] = you
-    
     # Create the body of the message (a plain-text and an HTML version).
     #text = "Automated Report: {0}\nS3 bucket information"
     html = "{0}".format(myhtml)
-    
     # Record the MIME types of both parts - text/plain and text/html.
     #part1 = MIMEText(text, 'plain')
     part2 = MIMEText(html, 'html')
-    
     # Attach parts into message container.
     # According to RFC 2046, the last part of a multipart message, in this case
     # the HTML message, is best and preferred.
     #msg.attach(part1)
     msg.attach(part2)
-    
     # Send the message via local SMTP server.
     s = smtplib.SMTP('smtp.gmail.com', 587)
     s.starttls()
-    s.login("emailid", "password")
-    
+    s.login("python2466@gmail.com", "python@2466")
     # sendmail function takes 3 arguments: sender's address, recipient's address
     # and message to send - here it is sent as one string.
     s.sendmail(me, you, msg.as_string())

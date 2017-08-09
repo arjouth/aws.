@@ -113,8 +113,8 @@ def convert_html():
     <table>
     <tr>
             <th>Bucket Name</th>
-            <th>Bucket Read access</th>
-            <th>Bucket Write acces</th>
+            <th>Bucket Write access</th>
+            <th>Bucket Read acces</th>
             <th>Bucket ACP Write access</th>
             <th>Bucket ACP Read access</th>
     </tr>
